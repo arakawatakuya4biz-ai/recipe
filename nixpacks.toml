@@ -3,7 +3,7 @@ nixPkgs = ["nodejs_20"]
 aptPkgs = ["python3-pip"]
 
 [phases.install]
-cmds = ["pip3 install -r backend/requirements.txt", "cd frontend && npm install"]
+cmds = ["pip3 install --break-system-packages -r backend/requirements.txt", "cd frontend && npm install"]
 
 [phases.build]
 cmds = ["cd frontend && npm run build"]
