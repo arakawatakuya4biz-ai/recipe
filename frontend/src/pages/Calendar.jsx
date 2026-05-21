@@ -48,7 +48,7 @@ function DayModal({ date, plans, onSave, onDelete, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-end" onClick={onClose}>
       <div className="bg-white rounded-t-2xl w-full max-w-lg mx-auto p-4" onClick={e => e.stopPropagation()}>
         <h2 className="font-bold text-center text-base mb-4">{date}</h2>
 
