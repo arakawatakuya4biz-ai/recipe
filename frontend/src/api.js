@@ -34,6 +34,12 @@ export const api = {
     update: (id, data) => request(`/inventory/freezer/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id) => request(`/inventory/freezer/${id}`, { method: 'DELETE' }),
   },
+  roomTemp: {
+    list: () => request('/inventory/room_temp'),
+    create: (data) => request('/inventory/room_temp', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/inventory/room_temp/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id) => request(`/inventory/room_temp/${id}`, { method: 'DELETE' }),
+  },
   meals: {
     list: (year, month) => request(`/meals${year && month ? `?year=${year}&month=${month}` : ''}`),
     create: (data) => request('/meals', { method: 'POST', body: JSON.stringify(data) }),

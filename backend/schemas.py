@@ -68,6 +68,7 @@ class InventoryFridgeOut(InventoryFridgeBase):
 class InventoryFreezerBase(BaseModel):
     name: str
     category: FreezerCategory = FreezerCategory.other
+    quantity: str = ""
     notes: str = ""
     planned_dish: str = ""
     planned_use: bool = False
@@ -80,12 +81,44 @@ class InventoryFreezerCreate(InventoryFreezerBase):
 class InventoryFreezerUpdate(BaseModel):
     name: Optional[str] = None
     category: Optional[FreezerCategory] = None
+    quantity: Optional[str] = None
     notes: Optional[str] = None
     planned_dish: Optional[str] = None
     planned_use: Optional[bool] = None
 
 
 class InventoryFreezerOut(InventoryFreezerBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# InventoryRoomTemp
+class InventoryRoomTempBase(BaseModel):
+    name: str
+    quantity: str = ""
+    expiry_date: Optional[date] = None
+    notes: str = ""
+    planned_dish: str = ""
+    planned_use: bool = False
+
+
+class InventoryRoomTempCreate(InventoryRoomTempBase):
+    pass
+
+
+class InventoryRoomTempUpdate(BaseModel):
+    name: Optional[str] = None
+    quantity: Optional[str] = None
+    expiry_date: Optional[date] = None
+    notes: Optional[str] = None
+    planned_dish: Optional[str] = None
+    planned_use: Optional[bool] = None
+
+
+class InventoryRoomTempOut(InventoryRoomTempBase):
     id: int
     created_at: datetime
 

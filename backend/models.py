@@ -75,6 +75,20 @@ class InventoryFreezer(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     category = Column(SAEnum(FreezerCategory), default=FreezerCategory.other)
+    quantity = Column(String, default="")
+    notes = Column(Text, default="")
+    planned_dish = Column(Text, default="")
+    planned_use = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class InventoryRoomTemp(Base):
+    __tablename__ = "inventory_room_temp"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    quantity = Column(String, default="")
+    expiry_date = Column(Date, nullable=True)
     notes = Column(Text, default="")
     planned_dish = Column(Text, default="")
     planned_use = Column(Boolean, default=False)

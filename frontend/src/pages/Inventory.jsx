@@ -247,7 +247,7 @@ function FridgeTab() {
 
 function FreezerTab() {
   const [items, setItems] = useState([])
-  const [form, setForm] = useState({ name: '', category: 'meat' })
+  const [form, setForm] = useState({ name: '', quantity: '', category: 'meat' })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { api.freezer.list().then(setItems).finally(() => setLoading(false)) }, [])
@@ -265,7 +265,7 @@ function FreezerTab() {
     if (!form.name.trim()) return
     const created = await api.freezer.create(form)
     setItems([...items, created])
-    setForm({ name: '', category: form.category })
+    setForm({ name: '', quantity: '', category: form.category })
   }
 
   const grouped = Object.fromEntries(
@@ -295,6 +295,14 @@ function FreezerTab() {
             value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
           />
+          {form.category === 'meat' && (
+            <input
+              className="w-20 border rounded-lg px-3 py-2 text-sm"
+              placeholder="量"
+              value={form.quantity}
+              onChange={e => setForm({ ...form, quantity: e.target.value })}
+            />
+          )}
           <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium">追加</button>
         </div>
       </form>
@@ -305,7 +313,12 @@ function FreezerTab() {
             <h3 className={`text-xs font-semibold mb-2 px-2 py-1 rounded-lg inline-block border ${FREEZER_COLORS[cat]}`}>{label}</h3>
             {grouped[cat].map(item => (
               <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del}>
-                <span className="font-medium text-sm">{item.name}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-sm">{item.name}</span>
+                  {cat === 'meat' && item.quantity && (
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{item.quantity}</span>
+                  )}
+                </div>
                 <div className="mt-1">
                   <PlanInput value={item.planned_dish} onChange={v => update(item.id, { planned_dish: v })} />
                 </div>
@@ -322,10 +335,80 @@ function FreezerTab() {
   )
 }
 
+function RoomTempTab() {
+  const [items, setItems] = useState([])
+  const [form, setForm] = useState({ name: '', quantity: '', expiry_date: '' })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { api.roomTemp.list().then(setItems).finally(() => setLoading(false)) }, [])
+
+  const update = async (id, data) => {
+    const updated = await api.roomTemp.update(id, data)
+    setItems(items.map(i => i.id === id ? updated : i))
+  }
+  const del = async (id) => {
+    await api.roomTemp.delete(id)
+    setItems(items.filter(i => i.id !== id))
+  }
+  const add = async (e) => {
+    e.preventDefault()
+    if (!form.name.trim()) return
+    const created = await api.roomTemp.create({ ...form, expiry_date: form.expiry_date || null })
+    setItems([...items, created])
+    setForm({ name: '', quantity: '', expiry_date: '' })
+  }
+
+  if (loading) return <div className="text-center py-8 text-gray-400">読み込み中...</div>
+
+  return (
+    <div>
+      <form onSubmit={add} className="bg-white border rounded-xl p-3 mb-4 flex gap-2 flex-wrap">
+        <input
+          className="flex-1 border rounded-lg px-3 py-2 text-sm min-w-24"
+          placeholder="食材名"
+          value={form.name}
+          onChange={e => setForm({ ...form, name: e.target.value })}
+        />
+        <input
+          className="w-20 border rounded-lg px-3 py-2 text-sm"
+          placeholder="量"
+          value={form.quantity}
+          onChange={e => setForm({ ...form, quantity: e.target.value })}
+        />
+        <input
+          type="date"
+          className="border rounded-lg px-2 py-2 text-sm"
+          value={form.expiry_date}
+          onChange={e => setForm({ ...form, expiry_date: e.target.value })}
+        />
+        <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium">追加</button>
+      </form>
+
+      {items.map(item => (
+        <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm">{item.name}</span>
+            {item.quantity && (
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{item.quantity}</span>
+            )}
+            <ExpiryBadge date={item.expiry_date} />
+          </div>
+          <PlanInput value={item.planned_dish} onChange={v => update(item.id, { planned_dish: v })} />
+        </ItemRow>
+      ))}
+
+      {items.length === 0 && (
+        <p className="text-center text-gray-400 text-sm py-8">常温食材を追加してください</p>
+      )}
+    </div>
+  )
+}
+
 const TABS = [
   { key: 'vegetables', label: '🥦 野菜' },
   { key: 'fridge', label: '❄️ 冷蔵' },
   { key: 'freezer', label: '🧊 冷凍' },
+  { key: 'room_temp', label: '🌡️ 常温' },
 ]
 
 export default function Inventory() {
@@ -351,6 +434,7 @@ export default function Inventory() {
         {tab === 'vegetables' && <VegetablesTab />}
         {tab === 'fridge' && <FridgeTab />}
         {tab === 'freezer' && <FreezerTab />}
+        {tab === 'room_temp' && <RoomTempTab />}
       </div>
     </div>
   )

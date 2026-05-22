@@ -126,3 +126,43 @@ def delete_freezer(item_id: int, db: Session = Depends(get_db)):
     db.delete(db_item)
     db.commit()
     return {"ok": True}
+
+
+# --- RoomTemp ---
+@router.get("/room_temp", response_model=List[schemas.InventoryRoomTempOut])
+def list_room_temp(db: Session = Depends(get_db)):
+    return db.query(models.InventoryRoomTemp).order_by(
+        models.InventoryRoomTemp.expiry_date.asc().nullslast(),
+        models.InventoryRoomTemp.created_at
+    ).all()
+
+
+@router.post("/room_temp", response_model=schemas.InventoryRoomTempOut)
+def create_room_temp(item: schemas.InventoryRoomTempCreate, db: Session = Depends(get_db)):
+    db_item = models.InventoryRoomTemp(**item.model_dump())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@router.patch("/room_temp/{item_id}", response_model=schemas.InventoryRoomTempOut)
+def update_room_temp(item_id: int, item: schemas.InventoryRoomTempUpdate, db: Session = Depends(get_db)):
+    db_item = db.query(models.InventoryRoomTemp).filter(models.InventoryRoomTemp.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    for field, value in item.model_dump(exclude_unset=True).items():
+        setattr(db_item, field, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@router.delete("/room_temp/{item_id}")
+def delete_room_temp(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(models.InventoryRoomTemp).filter(models.InventoryRoomTemp.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"ok": True}
