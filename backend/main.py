@@ -4,11 +4,24 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from database import engine, Base
 from routers import inventory, meals, shopping, memos, recipes
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+
+# Add columns that may be missing from existing tables
+_migrations = [
+    "ALTER TABLE inventory_freezer ADD COLUMN quantity VARCHAR DEFAULT ''",
+]
+with engine.connect() as conn:
+    for sql in _migrations:
+        try:
+            conn.execute(text(sql))
+            conn.commit()
+        except Exception:
+            pass
 
 app = FastAPI(title="Recipe App API")
 

@@ -263,9 +263,13 @@ function FreezerTab() {
   const add = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return
-    const created = await api.freezer.create(form)
-    setItems([...items, created])
-    setForm({ name: '', quantity: '', category: form.category })
+    try {
+      const created = await api.freezer.create(form)
+      setItems([...items, created])
+      setForm({ name: '', quantity: '', category: form.category })
+    } catch (err) {
+      alert('追加に失敗しました: ' + err.message)
+    }
   }
 
   const grouped = Object.fromEntries(
