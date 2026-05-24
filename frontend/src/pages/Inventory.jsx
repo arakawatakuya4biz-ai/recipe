@@ -37,7 +37,22 @@ function ExpiryBadge({ date }) {
   )
 }
 
-function ItemRow({ item, onUpdate, onDelete, children }) {
+function EditSheet({ title, onClose, onSave, children }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-end" onClick={onClose}>
+      <div className="bg-white rounded-t-2xl w-full max-w-lg mx-auto p-4" onClick={e => e.stopPropagation()}>
+        <h2 className="font-bold text-center text-base mb-4">{title}</h2>
+        {children}
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} className="flex-1 py-2 border rounded-lg text-sm text-gray-600">キャンセル</button>
+          <button onClick={onSave} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ItemRow({ item, onUpdate, onDelete, onEdit, children }) {
   return (
     <div className={`border rounded-xl p-3 mb-2 bg-white ${item.planned_use ? 'opacity-60' : ''}`}>
       <div className="flex items-start gap-2">
@@ -50,6 +65,7 @@ function ItemRow({ item, onUpdate, onDelete, children }) {
           {item.planned_use && <span className="text-xs">✓</span>}
         </button>
         <div className="flex-1 min-w-0">{children}</div>
+        <button onClick={() => onEdit(item)} className="text-gray-300 hover:text-blue-400 text-base leading-none px-1">✏️</button>
         <button onClick={() => onDelete(item.id)} className="text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
       </div>
       {item.planned_dish && (
@@ -86,6 +102,8 @@ function VegetablesTab() {
   const [items, setItems] = useState([])
   const [form, setForm] = useState({ name: '', is_staple: false, status: 'good' })
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState({})
 
   useEffect(() => { api.vegetables.list().then(setItems).finally(() => setLoading(false)) }, [])
 
@@ -103,6 +121,14 @@ function VegetablesTab() {
     const created = await api.vegetables.create(form)
     setItems([...items, created])
     setForm({ name: '', is_staple: false, status: 'good' })
+  }
+  const startEdit = (item) => {
+    setEditing(item)
+    setEditForm({ name: item.name, is_staple: item.is_staple, status: item.status })
+  }
+  const saveEdit = async () => {
+    await update(editing.id, editForm)
+    setEditing(null)
   }
 
   const staples = items.filter(i => i.is_staple)
@@ -143,7 +169,7 @@ function VegetablesTab() {
         <>
           <h3 className="text-xs font-semibold text-gray-500 mb-2">常備野菜</h3>
           {staples.map(item => (
-            <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del}>
+            <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del} onEdit={startEdit}>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{item.name}</span>
                 <div className="flex gap-1">
@@ -168,7 +194,7 @@ function VegetablesTab() {
         <>
           <h3 className="text-xs font-semibold text-gray-500 mb-2 mt-4">その他の野菜</h3>
           {others.map(item => (
-            <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del}>
+            <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del} onEdit={startEdit}>
               <span className="font-medium text-sm">{item.name}</span>
               <div className="mt-1">
                 <PlanInput value={item.planned_dish} onChange={v => update(item.id, { planned_dish: v })} />
@@ -181,6 +207,34 @@ function VegetablesTab() {
       {items.length === 0 && (
         <p className="text-center text-gray-400 text-sm py-8">野菜を追加してください</p>
       )}
+
+      {editing && (
+        <EditSheet title="野菜を編集" onClose={() => setEditing(null)} onSave={saveEdit}>
+          <div className="flex gap-2 mb-3">
+            <input
+              className="flex-1 border rounded-lg px-3 py-2 text-sm"
+              placeholder="野菜名"
+              value={editForm.name}
+              onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+            />
+            <label className="flex items-center gap-1 text-sm text-gray-600">
+              <input type="checkbox" checked={editForm.is_staple} onChange={e => setEditForm({ ...editForm, is_staple: e.target.checked })} />
+              常備
+            </label>
+          </div>
+          <div className="flex gap-2">
+            {Object.entries(STATUS_LABELS).map(([k, v]) => (
+              <button
+                key={k} type="button"
+                onClick={() => setEditForm({ ...editForm, status: k })}
+                className={`flex-1 py-1 rounded-lg border text-sm font-bold transition-colors ${
+                  editForm.status === k ? STATUS_COLORS[k] : 'bg-white border-gray-200 text-gray-400'
+                }`}
+              >{v}</button>
+            ))}
+          </div>
+        </EditSheet>
+      )}
     </div>
   )
 }
@@ -189,6 +243,8 @@ function FridgeTab() {
   const [items, setItems] = useState([])
   const [form, setForm] = useState({ name: '', expiry_date: '' })
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState({})
 
   useEffect(() => { api.fridge.list().then(setItems).finally(() => setLoading(false)) }, [])
 
@@ -206,6 +262,14 @@ function FridgeTab() {
     const created = await api.fridge.create({ ...form, expiry_date: form.expiry_date || null })
     setItems([...items, created])
     setForm({ name: '', expiry_date: '' })
+  }
+  const startEdit = (item) => {
+    setEditing(item)
+    setEditForm({ name: item.name, expiry_date: item.expiry_date || '' })
+  }
+  const saveEdit = async () => {
+    await update(editing.id, { ...editForm, expiry_date: editForm.expiry_date || null })
+    setEditing(null)
   }
 
   if (loading) return <div className="text-center py-8 text-gray-400">読み込み中...</div>
@@ -229,7 +293,7 @@ function FridgeTab() {
       </form>
 
       {items.map(item => (
-        <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del}>
+        <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del} onEdit={startEdit}>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{item.name}</span>
             <ExpiryBadge date={item.expiry_date} />
@@ -241,6 +305,24 @@ function FridgeTab() {
       {items.length === 0 && (
         <p className="text-center text-gray-400 text-sm py-8">冷蔵庫の食材を追加してください</p>
       )}
+
+      {editing && (
+        <EditSheet title="冷蔵食材を編集" onClose={() => setEditing(null)} onSave={saveEdit}>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
+            placeholder="食材名"
+            value={editForm.name}
+            onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+          />
+          <label className="block text-xs text-gray-500 mb-1">賞味期限</label>
+          <input
+            type="date"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={editForm.expiry_date}
+            onChange={e => setEditForm({ ...editForm, expiry_date: e.target.value })}
+          />
+        </EditSheet>
+      )}
     </div>
   )
 }
@@ -249,6 +331,8 @@ function FreezerTab() {
   const [items, setItems] = useState([])
   const [form, setForm] = useState({ name: '', quantity: '', category: 'meat' })
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState({})
 
   useEffect(() => { api.freezer.list().then(setItems).finally(() => setLoading(false)) }, [])
 
@@ -270,6 +354,14 @@ function FreezerTab() {
     } catch (err) {
       alert('追加に失敗しました: ' + err.message)
     }
+  }
+  const startEdit = (item) => {
+    setEditing(item)
+    setEditForm({ name: item.name, category: item.category, quantity: item.quantity || '' })
+  }
+  const saveEdit = async () => {
+    await update(editing.id, editForm)
+    setEditing(null)
   }
 
   const grouped = Object.fromEntries(
@@ -316,7 +408,7 @@ function FreezerTab() {
           <div key={cat} className="mb-4">
             <h3 className={`text-xs font-semibold mb-2 px-2 py-1 rounded-lg inline-block border ${FREEZER_COLORS[cat]}`}>{label}</h3>
             {grouped[cat].map(item => (
-              <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del}>
+              <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del} onEdit={startEdit}>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-sm">{item.name}</span>
                   {cat === 'meat' && item.quantity && (
@@ -335,6 +427,36 @@ function FreezerTab() {
       {items.length === 0 && (
         <p className="text-center text-gray-400 text-sm py-8">冷凍食材を追加してください</p>
       )}
+
+      {editing && (
+        <EditSheet title="冷凍食材を編集" onClose={() => setEditing(null)} onSave={saveEdit}>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
+            placeholder="食材名"
+            value={editForm.name}
+            onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+          />
+          <div className="flex gap-1 mb-3">
+            {Object.entries(FREEZER_LABELS).map(([k, v]) => (
+              <button
+                key={k} type="button"
+                onClick={() => setEditForm({ ...editForm, category: k })}
+                className={`flex-1 py-1.5 rounded-lg border text-sm transition-colors ${
+                  editForm.category === k ? 'bg-indigo-100 border-indigo-400 text-indigo-700 font-semibold' : 'bg-white border-gray-200 text-gray-500'
+                }`}
+              >{v}</button>
+            ))}
+          </div>
+          {editForm.category === 'meat' && (
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="量（例：300g）"
+              value={editForm.quantity}
+              onChange={e => setEditForm({ ...editForm, quantity: e.target.value })}
+            />
+          )}
+        </EditSheet>
+      )}
     </div>
   )
 }
@@ -343,6 +465,8 @@ function RoomTempTab() {
   const [items, setItems] = useState([])
   const [form, setForm] = useState({ name: '', quantity: '', expiry_date: '' })
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState({})
 
   useEffect(() => { api.roomTemp.list().then(setItems).finally(() => setLoading(false)) }, [])
 
@@ -360,6 +484,14 @@ function RoomTempTab() {
     const created = await api.roomTemp.create({ ...form, expiry_date: form.expiry_date || null })
     setItems([...items, created])
     setForm({ name: '', quantity: '', expiry_date: '' })
+  }
+  const startEdit = (item) => {
+    setEditing(item)
+    setEditForm({ name: item.name, quantity: item.quantity || '', expiry_date: item.expiry_date || '' })
+  }
+  const saveEdit = async () => {
+    await update(editing.id, { ...editForm, expiry_date: editForm.expiry_date || null })
+    setEditing(null)
   }
 
   if (loading) return <div className="text-center py-8 text-gray-400">読み込み中...</div>
@@ -389,7 +521,7 @@ function RoomTempTab() {
       </form>
 
       {items.map(item => (
-        <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del}>
+        <ItemRow key={item.id} item={item} onUpdate={update} onDelete={del} onEdit={startEdit}>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{item.name}</span>
             {item.quantity && (
@@ -403,6 +535,30 @@ function RoomTempTab() {
 
       {items.length === 0 && (
         <p className="text-center text-gray-400 text-sm py-8">常温食材を追加してください</p>
+      )}
+
+      {editing && (
+        <EditSheet title="常温食材を編集" onClose={() => setEditing(null)} onSave={saveEdit}>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
+            placeholder="食材名"
+            value={editForm.name}
+            onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+          />
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
+            placeholder="量（例：1袋）"
+            value={editForm.quantity}
+            onChange={e => setEditForm({ ...editForm, quantity: e.target.value })}
+          />
+          <label className="block text-xs text-gray-500 mb-1">賞味期限</label>
+          <input
+            type="date"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={editForm.expiry_date}
+            onChange={e => setEditForm({ ...editForm, expiry_date: e.target.value })}
+          />
+        </EditSheet>
       )}
     </div>
   )
