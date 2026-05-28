@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 
 const STORES = [
@@ -53,10 +53,94 @@ export default function Shopping() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [dragging, setDragging] = useState(null)
+  const [dragOver, setDragOver] = useState(null)
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState({})
 
+  // Refs so touch event handlers (registered once) can always read latest state
+  const itemsRef = useRef(items)
+  const touchDragRef = useRef(null)
+  useEffect(() => { itemsRef.current = items }, [items])
+
   useEffect(() => { api.shopping.list().then(setItems).finally(() => setLoading(false)) }, [])
+
+  const applyReorder = (currentItems, dragId, targetId) => {
+    const draggedItem = currentItems.find(i => i.id === dragId)
+    const targetItem = currentItems.find(i => i.id === targetId)
+    if (!draggedItem || !targetItem || draggedItem.store !== targetItem.store) return null
+    const newItems = [...currentItems]
+    const fromIdx = newItems.findIndex(i => i.id === dragId)
+    const toIdx = newItems.findIndex(i => i.id === targetId)
+    const [moved] = newItems.splice(fromIdx, 1)
+    newItems.splice(toIdx, 0, moved)
+    return { newItems, store: draggedItem.store }
+  }
+
+  const saveOrder = async (newItems, store) => {
+    const storeItems = newItems.filter(i => i.store === store)
+    await Promise.all(storeItems.map((item, idx) => api.shopping.update(item.id, { sort_order: idx })))
+  }
+
+  // Touch DnD — registered once, reads state via refs
+  useEffect(() => {
+    const onTouchMove = (e) => {
+      if (!touchDragRef.current) return
+      e.preventDefault() // prevent scroll while dragging; requires non-passive listener
+      const touch = e.touches[0]
+      const els = document.elementsFromPoint(touch.clientX, touch.clientY)
+      const itemEl = els.find(el => el.dataset.itemId && parseInt(el.dataset.itemId) !== touchDragRef.current)
+      setDragOver(itemEl ? parseInt(itemEl.dataset.itemId) : null)
+    }
+
+    const onTouchEnd = async (e) => {
+      const dragId = touchDragRef.current
+      if (!dragId) return
+      touchDragRef.current = null
+      setDragging(null)
+      setDragOver(null)
+
+      const touch = e.changedTouches[0]
+      const els = document.elementsFromPoint(touch.clientX, touch.clientY)
+      const itemEl = els.find(el => el.dataset.itemId && parseInt(el.dataset.itemId) !== dragId)
+      if (!itemEl) return
+
+      const targetId = parseInt(itemEl.dataset.itemId)
+      const result = applyReorder(itemsRef.current, dragId, targetId)
+      if (!result) return
+      setItems(result.newItems)
+      await saveOrder(result.newItems, result.store)
+    }
+
+    // passive: false is required so we can call e.preventDefault() in touchmove
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    document.addEventListener('touchend', onTouchEnd)
+    return () => {
+      document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [])
+
+  // HTML5 DnD (desktop)
+  const handleDragStart = (e, itemId) => {
+    setDragging(itemId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const handleDragOver = (e, itemId) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOver(itemId)
+  }
+  const handleDrop = async (e, targetItem) => {
+    e.preventDefault()
+    const dragId = dragging
+    setDragging(null)
+    setDragOver(null)
+    const result = applyReorder(itemsRef.current, dragId, targetItem.id)
+    if (!result) return
+    setItems(result.newItems)
+    await saveOrder(result.newItems, result.store)
+  }
+  const handleDragEnd = () => { setDragging(null); setDragOver(null) }
 
   const add = async (e) => {
     e.preventDefault()
@@ -94,32 +178,6 @@ export default function Shopping() {
     const updated = await api.shopping.update(editing.id, editForm)
     setItems(prev => prev.map(i => i.id === editing.id ? updated : i))
     setEditing(null)
-  }
-
-  const handleDragStart = (e, itemId) => {
-    setDragging(itemId)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-  const handleDrop = async (e, targetItem) => {
-    e.preventDefault()
-    if (!dragging || dragging === targetItem.id) { setDragging(null); return }
-    const draggedItem = items.find(i => i.id === dragging)
-    if (!draggedItem || draggedItem.store !== targetItem.store) { setDragging(null); return }
-
-    const newItems = [...items]
-    const fromIdx = newItems.findIndex(i => i.id === dragging)
-    const toIdx = newItems.findIndex(i => i.id === targetItem.id)
-    const [moved] = newItems.splice(fromIdx, 1)
-    newItems.splice(toIdx, 0, moved)
-    setItems(newItems)
-    setDragging(null)
-
-    const storeItems = newItems.filter(i => i.store === draggedItem.store)
-    await Promise.all(storeItems.map((item, idx) => api.shopping.update(item.id, { sort_order: idx })))
   }
 
   const checkedCount = items.filter(i => i.checked).length
@@ -198,16 +256,24 @@ export default function Shopping() {
                 {store.items.map(item => (
                   <div
                     key={item.id}
+                    data-item-id={item.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, item.id)}
-                    onDragOver={handleDragOver}
+                    onDragOver={(e) => handleDragOver(e, item.id)}
                     onDrop={(e) => handleDrop(e, item)}
-                    onDragEnd={() => setDragging(null)}
+                    onDragEnd={handleDragEnd}
                     className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                      item.checked ? 'bg-gray-50 border-gray-200 opacity-60' : `bg-white ${store.border}`
-                    } ${dragging === item.id ? 'opacity-40' : ''}`}
+                      dragOver === item.id
+                        ? `${store.bg} ${store.border} border-dashed`
+                        : item.checked
+                          ? 'bg-gray-50 border-gray-200 opacity-60'
+                          : `bg-white ${store.border}`
+                    } ${dragging === item.id ? 'opacity-40 pointer-events-none' : ''}`}
                   >
-                    <span className="text-gray-300 cursor-grab text-lg select-none px-0.5">⠿</span>
+                    <span
+                      className="text-gray-300 cursor-grab active:cursor-grabbing text-lg select-none px-0.5 touch-none"
+                      onTouchStart={(e) => { touchDragRef.current = item.id; setDragging(item.id) }}
+                    >⠿</span>
                     <button
                       onClick={() => toggle(item)}
                       className={`w-9 h-9 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
