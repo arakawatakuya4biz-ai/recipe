@@ -61,10 +61,14 @@ export default function Shopping() {
   const add = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return
-    const created = await api.shopping.create(form)
-    setItems(prev => [...prev, created])
-    setForm({ name: '', store: form.store, notes: '' })
-    setShowForm(false)
+    try {
+      const created = await api.shopping.create(form)
+      setItems(prev => [...prev, created])
+      setForm({ name: '', store: form.store, notes: '' })
+      setShowForm(false)
+    } catch (err) {
+      alert('追加に失敗しました: ' + err.message)
+    }
   }
 
   const toggle = async (item) => {

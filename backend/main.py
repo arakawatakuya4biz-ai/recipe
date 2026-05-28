@@ -16,13 +16,13 @@ _migrations = [
     "ALTER TABLE inventory_freezer ADD COLUMN quantity VARCHAR DEFAULT ''",
     "ALTER TABLE shopping_items ADD COLUMN sort_order INTEGER DEFAULT 0",
 ]
-with engine.connect() as conn:
-    for sql in _migrations:
-        try:
-            conn.execute(text(sql))
-            conn.commit()
-        except Exception:
-            pass
+for _sql in _migrations:
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(_sql))
+            _conn.commit()
+    except Exception:
+        pass
 
 app = FastAPI(title="Recipe App API")
 
