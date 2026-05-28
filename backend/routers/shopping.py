@@ -12,13 +12,15 @@ router = APIRouter(prefix="/shopping", tags=["shopping"])
 def list_shopping(db: Session = Depends(get_db)):
     return db.query(models.ShoppingItem).order_by(
         models.ShoppingItem.store,
+        models.ShoppingItem.sort_order,
         models.ShoppingItem.created_at
     ).all()
 
 
 @router.post("", response_model=schemas.ShoppingItemOut)
 def create_shopping(item: schemas.ShoppingItemCreate, db: Session = Depends(get_db)):
-    db_item = models.ShoppingItem(**item.model_dump())
+    count = db.query(models.ShoppingItem).filter(models.ShoppingItem.store == item.store).count()
+    db_item = models.ShoppingItem(**item.model_dump(), sort_order=count)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)

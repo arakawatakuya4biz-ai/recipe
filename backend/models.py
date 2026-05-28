@@ -115,6 +115,7 @@ class ShoppingItem(Base):
     store = Column(SAEnum(StoreEnum), default=StoreEnum.unknown)
     checked = Column(Boolean, default=False)
     notes = Column(Text, default="")
+    sort_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

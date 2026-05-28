@@ -14,6 +14,7 @@ Base.metadata.create_all(bind=engine)
 # Add columns that may be missing from existing tables
 _migrations = [
     "ALTER TABLE inventory_freezer ADD COLUMN quantity VARCHAR DEFAULT ''",
+    "ALTER TABLE shopping_items ADD COLUMN sort_order INTEGER DEFAULT 0",
 ]
 with engine.connect() as conn:
     for sql in _migrations:

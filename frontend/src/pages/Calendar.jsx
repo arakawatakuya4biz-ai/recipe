@@ -88,6 +88,7 @@ export default function Calendar() {
   const [month, setMonth] = useState(today.getMonth())
   const [plans, setPlans] = useState([])
   const [selected, setSelected] = useState(null)
+  const [search, setSearch] = useState('')
 
   const load = useCallback(() => {
     api.meals.list(year, month + 1).then(setPlans)
@@ -164,12 +165,22 @@ export default function Calendar() {
       </div>
 
       <div className="p-3">
-        <h2 className="font-semibold text-sm text-gray-700 mb-2">今月の献立</h2>
+        <div className="flex items-center gap-2 mb-2">
+          <h2 className="font-semibold text-sm text-gray-700">今月の献立</h2>
+          <input
+            className="flex-1 border rounded-lg px-2 py-1 text-xs"
+            placeholder="料理名・食材で検索..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
         {plans.length === 0 ? (
           <p className="text-center text-gray-400 text-sm py-4">日付をタップして献立を追加</p>
         ) : (
           <div className="space-y-2">
-            {plans.map(p => (
+            {plans.filter(p =>
+              !search || p.dish_name.includes(search) || (p.ingredients && p.ingredients.includes(search))
+            ).map(p => (
               <div key={p.id} className="bg-white border rounded-xl p-3 flex justify-between items-start">
                 <div>
                   <span className="text-xs text-gray-400">{p.date} {p.meal_type === 'lunch' ? '昼' : '夜'}</span>
