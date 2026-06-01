@@ -19,7 +19,7 @@ function MealBadge({ plan }) {
   )
 }
 
-function DayModal({ date, plans, onSave, onDelete, onClose }) {
+function DayModal({ date, plans, onSave, onClose }) {
   const lunch = plans.find(p => p.meal_type === 'lunch')
   const dinner = plans.find(p => p.meal_type === 'dinner')
   const [lunchData, setLunchData] = useState({ dish_name: lunch?.dish_name || '', ingredients: lunch?.ingredients || '' })
@@ -82,6 +82,34 @@ function DayModal({ date, plans, onSave, onDelete, onClose }) {
   )
 }
 
+function MonthPicker({ year, month, pickerYear, setPickerYear, onChange, onClose }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-20" onClick={onClose} />
+      <div className="absolute top-full left-0 right-0 bg-white border-b shadow-lg z-30 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => setPickerYear(y => y - 1)} className="p-2 text-gray-500 hover:text-gray-800">◀</button>
+          <span className="font-bold text-base">{pickerYear}年</span>
+          <button onClick={() => setPickerYear(y => y + 1)} className="p-2 text-gray-500 hover:text-gray-800">▶</button>
+        </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
+            <button
+              key={m}
+              onClick={() => { onChange(pickerYear, m - 1); onClose() }}
+              className={`py-2 rounded-lg text-sm font-medium transition-colors ${
+                pickerYear === year && m - 1 === month
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-emerald-100'
+              }`}
+            >{m}月</button>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
 export default function Calendar() {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
@@ -89,6 +117,9 @@ export default function Calendar() {
   const [plans, setPlans] = useState([])
   const [selected, setSelected] = useState(null)
   const [search, setSearch] = useState('')
+  const [allPlans, setAllPlans] = useState(null) // loaded lazily on first search
+  const [showPicker, setShowPicker] = useState(false)
+  const [pickerYear, setPickerYear] = useState(today.getFullYear())
 
   const load = useCallback(() => {
     api.meals.list(year, month + 1).then(setPlans)
@@ -96,14 +127,26 @@ export default function Calendar() {
 
   useEffect(() => { load() }, [load])
 
+  // Load all plans the first time the user types a search query
+  useEffect(() => {
+    if (search && allPlans === null) {
+      api.meals.list().then(setAllPlans)
+    }
+  }, [search, allPlans])
+
+  const handleSave = useCallback(() => {
+    load()
+    setAllPlans(null) // invalidate cache so next search gets fresh data
+    setSelected(null)
+  }, [load])
+
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
 
   const plansMap = {}
   plans.forEach(p => {
-    const key = p.date
-    if (!plansMap[key]) plansMap[key] = []
-    plansMap[key].push(p)
+    if (!plansMap[p.date]) plansMap[p.date] = []
+    plansMap[p.date].push(p)
   })
 
   const prevMonth = () => {
@@ -122,14 +165,36 @@ export default function Calendar() {
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
+  // Use all plans when searching, current month plans otherwise
+  const searchSource = search ? (allPlans ?? plans) : plans
+  const filteredPlans = searchSource.filter(p =>
+    !search || p.dish_name.includes(search) || (p.ingredients && p.ingredients.includes(search))
+  )
+
   return (
     <div className="max-w-lg mx-auto">
-      <div className="bg-white border-b sticky top-0 z-10 px-4 py-3">
-        <div className="flex items-center justify-between">
+      <div className="bg-white border-b sticky top-0 z-10 relative">
+        <div className="flex items-center justify-between px-4 py-3">
           <button onClick={prevMonth} className="p-2 text-gray-500 hover:text-gray-800">◀</button>
-          <h1 className="font-bold text-base">{year}年{month + 1}月</h1>
+          <button
+            onClick={() => { setPickerYear(year); setShowPicker(v => !v) }}
+            className="font-bold text-base hover:text-emerald-600 transition-colors px-2 py-1 rounded-lg"
+          >
+            {year}年{month + 1}月
+          </button>
           <button onClick={nextMonth} className="p-2 text-gray-500 hover:text-gray-800">▶</button>
         </div>
+
+        {showPicker && (
+          <MonthPicker
+            year={year}
+            month={month}
+            pickerYear={pickerYear}
+            setPickerYear={setPickerYear}
+            onChange={(y, m) => { setYear(y); setMonth(m) }}
+            onClose={() => setShowPicker(false)}
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-7 text-center text-xs font-semibold py-1 bg-white border-b">
@@ -166,21 +231,23 @@ export default function Calendar() {
 
       <div className="p-3">
         <div className="flex items-center gap-2 mb-2">
-          <h2 className="font-semibold text-sm text-gray-700">今月の献立</h2>
+          <h2 className="font-semibold text-sm text-gray-700 whitespace-nowrap">
+            {search ? '検索結果' : '今月の献立'}
+          </h2>
           <input
             className="flex-1 border rounded-lg px-2 py-1 text-xs"
-            placeholder="料理名・食材で検索..."
+            placeholder="料理名・食材で検索（全期間）..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        {plans.length === 0 ? (
-          <p className="text-center text-gray-400 text-sm py-4">日付をタップして献立を追加</p>
+        {filteredPlans.length === 0 ? (
+          <p className="text-center text-gray-400 text-sm py-4">
+            {search ? '該当する献立がありません' : '日付をタップして献立を追加'}
+          </p>
         ) : (
           <div className="space-y-2">
-            {plans.filter(p =>
-              !search || p.dish_name.includes(search) || (p.ingredients && p.ingredients.includes(search))
-            ).map(p => (
+            {filteredPlans.map(p => (
               <div key={p.id} className="bg-white border rounded-xl p-3 flex justify-between items-start">
                 <div>
                   <span className="text-xs text-gray-400">{p.date} {p.meal_type === 'lunch' ? '昼' : '夜'}</span>
@@ -188,7 +255,7 @@ export default function Calendar() {
                   {p.ingredients && <p className="text-xs text-gray-500">{p.ingredients}</p>}
                 </div>
                 <button
-                  onClick={async () => { await api.meals.delete(p.id); load() }}
+                  onClick={async () => { await api.meals.delete(p.id); load(); setAllPlans(null) }}
                   className="text-gray-300 hover:text-red-400 text-lg"
                 >×</button>
               </div>
@@ -201,8 +268,7 @@ export default function Calendar() {
         <DayModal
           date={selected}
           plans={plansMap[selected] || []}
-          onSave={() => { load(); setSelected(null) }}
-          onDelete={() => { load(); setSelected(null) }}
+          onSave={handleSave}
           onClose={() => setSelected(null)}
         />
       )}
