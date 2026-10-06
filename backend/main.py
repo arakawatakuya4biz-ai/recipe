@@ -1,7 +1,5 @@
 import os
-import threading
 os.environ.setdefault("TZ", "Asia/Tokyo")
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -10,30 +8,24 @@ from sqlalchemy import text
 from database import engine, Base
 from routers import inventory, meals, shopping, memos, recipes
 
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"[startup] create_all failed (continuing): {e}")
+
 _migrations = [
     "ALTER TABLE inventory_freezer ADD COLUMN quantity VARCHAR DEFAULT ''",
     "ALTER TABLE shopping_items ADD COLUMN sort_order INTEGER DEFAULT 0",
 ]
+for _sql in _migrations:
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(_sql))
+            _conn.commit()
+    except Exception:
+        pass
 
-def _init_db():
-    Base.metadata.create_all(bind=engine)
-    for _sql in _migrations:
-        try:
-            with engine.connect() as _conn:
-                _conn.execute(text(_sql))
-                _conn.commit()
-        except Exception:
-            pass
-
-@asynccontextmanager
-async def lifespan(app):
-    # Run DB init in a background thread so the server can start accepting
-    # requests (and pass the healthcheck) immediately, without waiting for
-    # create_all + migrations to complete against a potentially cold DB.
-    threading.Thread(target=_init_db, daemon=True).start()
-    yield
-
-app = FastAPI(title="Recipe App API", lifespan=lifespan)
+app = FastAPI(title="Recipe App API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,7 +50,9 @@ def health():
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
 if os.path.exists(frontend_dist):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
