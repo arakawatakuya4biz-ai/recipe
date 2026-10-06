@@ -165,11 +165,18 @@ export default function Calendar() {
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
+  // Build a plans map that covers all months (used when editing from search results)
+  const allPlansMap = {}
+  ;(allPlans ?? plans).forEach(p => {
+    if (!allPlansMap[p.date]) allPlansMap[p.date] = []
+    allPlansMap[p.date].push(p)
+  })
+
   // Use all plans when searching, current month plans otherwise
   const searchSource = search ? (allPlans ?? plans) : plans
-  const filteredPlans = searchSource.filter(p =>
-    !search || p.dish_name.includes(search) || (p.ingredients && p.ingredients.includes(search))
-  )
+  const filteredPlans = searchSource
+    .filter(p => !search || p.dish_name.includes(search) || (p.ingredients && p.ingredients.includes(search)))
+    .sort((a, b) => search ? b.date.localeCompare(a.date) || (b.meal_type > a.meal_type ? 1 : -1) : 0)
 
   return (
     <div className="max-w-lg mx-auto">
@@ -249,15 +256,21 @@ export default function Calendar() {
           <div className="space-y-2">
             {filteredPlans.map(p => (
               <div key={p.id} className="bg-white border rounded-xl p-3 flex justify-between items-start">
-                <div>
+                <div className="flex-1 min-w-0 pr-2">
                   <span className="text-xs text-gray-400">{p.date} {p.meal_type === 'lunch' ? '昼' : '夜'}</span>
                   <p className="font-medium text-sm">{p.dish_name}</p>
                   {p.ingredients && <p className="text-xs text-gray-500">{p.ingredients}</p>}
                 </div>
-                <button
-                  onClick={async () => { await api.meals.delete(p.id); load(); setAllPlans(null) }}
-                  className="text-gray-300 hover:text-red-400 text-lg"
-                >×</button>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => setSelected(p.date)}
+                    className="text-gray-300 hover:text-blue-400 text-sm p-0.5"
+                  >✏️</button>
+                  <button
+                    onClick={async () => { await api.meals.delete(p.id); load(); setAllPlans(null) }}
+                    className="text-gray-300 hover:text-red-400 text-lg"
+                  >×</button>
+                </div>
               </div>
             ))}
           </div>
@@ -267,7 +280,7 @@ export default function Calendar() {
       {selected && (
         <DayModal
           date={selected}
-          plans={plansMap[selected] || []}
+          plans={allPlansMap[selected] || plansMap[selected] || []}
           onSave={handleSave}
           onClose={() => setSelected(null)}
         />
