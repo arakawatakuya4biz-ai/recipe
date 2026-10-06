@@ -1,5 +1,7 @@
 import os
+import threading
 os.environ.setdefault("TZ", "Asia/Tokyo")
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -8,25 +10,31 @@ from sqlalchemy import text
 from database import engine, Base
 from routers import inventory, meals, shopping, memos, recipes
 
-# Create tables
-Base.metadata.create_all(bind=engine)
-
-# Add columns that may be missing from existing tables
 _migrations = [
     "ALTER TABLE inventory_freezer ADD COLUMN quantity VARCHAR DEFAULT ''",
     "ALTER TABLE shopping_items ADD COLUMN sort_order INTEGER DEFAULT 0",
 ]
-for _sql in _migrations:
-    try:
-        with engine.connect() as _conn:
-            _conn.execute(text(_sql))
-            _conn.commit()
-    except Exception:
-        pass
 
-app = FastAPI(title="Recipe App API")
+def _init_db():
+    Base.metadata.create_all(bind=engine)
+    for _sql in _migrations:
+        try:
+            with engine.connect() as _conn:
+                _conn.execute(text(_sql))
+                _conn.commit()
+        except Exception:
+            pass
 
-# CORS for development
+@asynccontextmanager
+async def lifespan(app):
+    # Run DB init in a background thread so the server can start accepting
+    # requests (and pass the healthcheck) immediately, without waiting for
+    # create_all + migrations to complete against a potentially cold DB.
+    threading.Thread(target=_init_db, daemon=True).start()
+    yield
+
+app = FastAPI(title="Recipe App API", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,7 +43,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API routes
 app.include_router(inventory.router, prefix="/api")
 app.include_router(meals.router, prefix="/api")
 app.include_router(shopping.router, prefix="/api")
@@ -48,7 +55,6 @@ def health():
     return {"status": "ok"}
 
 
-# Serve React frontend
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
 if os.path.exists(frontend_dist):
